@@ -1,0 +1,419 @@
+# ============================================================================
+# HYBRIDRECON X - CENTRAL CONFIGURATION
+# ============================================================================
+# All settings for the framework are controlled here.
+# API keys, thread limits, rate limiting, and module toggles.
+# ============================================================================
+
+# Framework metadata
+framework:
+  name: "HybridRecon X"
+  version: "1.0.0"
+  author: "Security Research Team"
+  output_dir: "./output"  # Base output directory for all scans
+
+# ============================================================================
+# GLOBAL SETTINGS
+# ============================================================================
+global:
+  # Thread limits (adjust based on system resources)
+  threads:
+    default: 50
+    aggressive: 100
+    passive: 25
+  
+  # Rate limiting (requests per second)
+  rate_limit:
+    default: 50
+    slow: 10        # Used when WAF detected
+    aggressive: 150
+  
+  # Timeouts (in seconds)
+  timeouts:
+    http: 10
+    dns: 5
+    tool_execution: 3600  # 1 hour max for any single tool
+    amass: 900            # 15 min max for Amass
+  
+  # User agent rotation
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  rotate_user_agent: true
+
+# ============================================================================
+# API KEYS - POPULATE THESE FOR ENHANCED RESULTS
+# ============================================================================
+api_keys:
+  # Subfinder sources
+  shodan: ""
+  censys_id: ""
+  censys_secret: ""
+  virustotal: ""
+  passivetotal_username: ""
+  passivetotal_key: ""
+  securitytrails: ""
+  binaryedge: ""
+  chaos: ""           # ProjectDiscovery Chaos
+  github_token: ""    # For GitHub dorking
+  gitlab_token: ""
+  
+  # Cloud enumeration
+  aws_access_key: ""
+  aws_secret_key: ""
+  
+  # WPScan
+  wpscan_token: ""
+  
+  # Notification (blind XSS callbacks)
+  interactsh_server: ""
+  burp_collaborator: ""
+
+# ============================================================================
+# SCOPE CONTROL
+# ============================================================================
+scope:
+  # Domains/patterns to explicitly exclude from scanning
+  exclusions:
+    - "*.gov"
+    - "*.edu"
+    - "*.mil"
+    - "logout"
+    - "signout"
+    - "delete"
+    - "remove"
+  
+  # Max depth for recursive operations
+  max_depth:
+    crawl: 3
+    fuzz: 2
+    subdomain: 5
+  
+  # File extensions to skip during fuzzing
+  skip_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".gif"
+    - ".svg"
+    - ".ico"
+    - ".woff"
+    - ".woff2"
+    - ".ttf"
+    - ".eot"
+    - ".mp4"
+    - ".mp3"
+    - ".pdf"
+
+# ============================================================================
+# MODULE CONFIGURATION
+# ============================================================================
+modules:
+  # ---- Reconnaissance ----
+  recon:
+    enabled: true
+    subfinder:
+      enabled: true
+      all_sources: true
+    amass:
+      enabled: true
+      timeout: 15      # minutes
+      passive_only: true
+    assetfinder:
+      enabled: true
+    findomain:
+      enabled: true
+    dns_resolution:
+      enabled: true
+      use_puredns: true
+      resolvers: "/opt/resolvers/trusted.txt"
+      wildcard_filter: true
+  
+  # ---- Probing ----
+  probing:
+    enabled: true
+    httpx:
+      threads: 50
+      tech_detect: true
+      status_codes: true
+      content_length: true
+      title: true
+      follow_redirects: true
+      timeout: 10
+    screenshots:
+      enabled: true
+      tool: "gowitness"  # or "aquatone"
+  
+  # ---- Fingerprinting ----
+  fingerprint:
+    enabled: true
+    whatweb:
+      enabled: true
+      aggression: 3    # 1-4 (1=stealthy, 4=aggressive)
+    wafw00f:
+      enabled: true
+  
+  # ---- Content Discovery ----
+  content_discovery:
+    enabled: true
+    ffuf:
+      enabled: true
+      wordlist: "/opt/wordlists/active/directories.txt"
+      extensions: "php,asp,aspx,jsp,html,js,json,xml,txt,bak,old"
+      auto_calibrate: true
+      recursion: false
+      recursion_depth: 2
+      threads: 40
+      match_codes: "200,201,301,302,307,401,403,405,500"
+    katana:
+      enabled: true
+      depth: 3
+      js_crawl: true
+      headless: false
+    feroxbuster:
+      enabled: false   # Heavy tool, enable if needed
+      recursion_depth: 2
+    historical_urls:
+      enabled: true
+      gau: true
+      waybackurls: true
+  
+  # ---- Parameter Mining ----
+  parameter_mining:
+    enabled: true
+    paramspider:
+      enabled: true
+    arjun:
+      enabled: true
+      threads: 10
+    gf_patterns:
+      enabled: true
+      patterns:
+        - "xss"
+        - "sqli"
+        - "lfi"
+        - "rce"
+        - "redirect"
+        - "ssrf"
+        - "ssti"
+        - "idor"
+
+  # ---- Vulnerability Scanning ----
+  vulnerability:
+    enabled: true
+    nuclei:
+      enabled: true
+      severity: "critical,high,medium"
+      rate_limit: 150
+      bulk_size: 25
+      concurrency: 25
+      templates:
+        - "cves/"
+        - "vulnerabilities/"
+        - "exposures/"
+        - "misconfiguration/"
+        - "takeovers/"
+      exclude_tags:
+        - "dos"
+        - "fuzz"
+    
+    # CRITICAL: Dangerous module toggles
+    allow_destructive: false
+    
+    xss:
+      enabled: true
+      dalfox:
+        enabled: true
+        blind_xss: true
+        blind_xss_callback: ""  # Set your callback URL
+        waf_evasion: true
+      xsstrike:
+        enabled: false  # Slower, use for deep analysis
+    
+    sqli:
+      enabled: true
+      ghauri:
+        enabled: true
+        level: 1
+        batch: true
+      sqlmap:
+        enabled: true
+        level: 1
+        risk: 1
+        batch: true
+        # DANGER: These are very aggressive
+        dump_data: false
+        os_shell: false
+    
+    command_injection:
+      enabled: true
+      commix:
+        enabled: true
+        level: 1
+    
+    ssti:
+      enabled: true
+      tplmap:
+        enabled: true
+
+  # ---- CMS Specific ----
+  cms:
+    wordpress:
+      enabled: true
+      wpscan:
+        enumerate: "vp,vt,u"  # vulnerable plugins, themes, users
+        api_token: ""
+    joomla:
+      enabled: true
+    drupal:
+      enabled: true
+
+  # ---- Cloud & Git ----
+  cloud_git:
+    enabled: true
+    git_dumper:
+      enabled: true
+      auto_dump: true
+    secrets_scan:
+      enabled: true
+      gitleaks: true
+      trufflehog: true
+    cloud_enum:
+      enabled: true
+      s3scanner: true
+      mutations: true
+
+# ============================================================================
+# SMART ROUTER CONFIGURATION
+# ============================================================================
+smart_router:
+  # Technology-specific template mappings for Nuclei
+  tech_templates:
+    wordpress:
+      tags: ["wordpress", "wp-plugin", "wp-theme"]
+      tools: ["wpscan"]
+    joomla:
+      tags: ["joomla"]
+      tools: ["joomscan"]
+    drupal:
+      tags: ["drupal"]
+      tools: ["droopescan"]
+    laravel:
+      tags: ["laravel", "php"]
+      tools: []
+    spring:
+      tags: ["springboot", "java", "spring"]
+      tools: []
+    tomcat:
+      tags: ["tomcat", "apache", "java"]
+      tools: []
+    nginx:
+      tags: ["nginx"]
+      tools: []
+    iis:
+      tags: ["iis", "microsoft", "windows", "aspnet"]
+      tools: []
+      exclude_paths: ["etc/passwd", "/proc/", "/var/log/"]
+    node:
+      tags: ["nodejs", "express", "javascript"]
+      tools: []
+  
+  # WAF-specific rate limiting
+  waf_handling:
+    cloudflare:
+      rate_limit: 10
+      delay_ms: 1000
+    akamai:
+      rate_limit: 5
+      delay_ms: 2000
+    aws_waf:
+      rate_limit: 15
+      delay_ms: 500
+    default:
+      rate_limit: 50
+      delay_ms: 100
+
+# ============================================================================
+# NOTIFICATION CONFIGURATION
+# ============================================================================
+notifications:
+  enabled: true
+  
+  # When to notify
+  triggers:
+    - "critical_vuln"
+    - "high_vuln"
+    - "git_exposed"
+    - "secrets_found"
+    - "scan_complete"
+  
+  # Discord webhook
+  discord:
+    enabled: true
+    webhook_url: ""
+    username: "HybridRecon X"
+    avatar_url: ""
+  
+  # Slack webhook
+  slack:
+    enabled: false
+    webhook_url: ""
+    channel: "#security-alerts"
+  
+  # Telegram bot
+  telegram:
+    enabled: false
+    bot_token: ""
+    chat_id: ""
+  
+  # Email notifications
+  email:
+    enabled: false
+    smtp_server: ""
+    smtp_port: 587
+    username: ""
+    password: ""
+    from_addr: ""
+    to_addr: ""
+
+# ============================================================================
+# REPORTING
+# ============================================================================
+reporting:
+  enabled: true
+  format:
+    - "html"
+    - "json"
+    - "markdown"
+  include_screenshots: true
+  severity_filter: "critical,high,medium,low"
+  
+  # HTML report customization
+  html:
+    title: "HybridRecon X Security Assessment Report"
+    logo: ""
+    theme: "dark"  # dark or light
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "hybridrecon.log"
+  max_size_mb: 100
+  backup_count: 5
+  console_output: true
+  color_output: true
+
+# ============================================================================
+# PERFORMANCE TUNING
+# ============================================================================
+performance:
+  # Memory management
+  max_memory_percent: 80
+  
+  # Parallel execution
+  parallel_modules: false  # Run modules sequentially for stability
+  max_parallel_tools: 3
+  
+  # Caching
+  cache_dns_results: true
+  cache_ttl_seconds: 3600
