@@ -2,46 +2,42 @@
 # ============================================================================
 # MODULE 03: FINGERPRINTING (THE BRAIN INPUT)
 # ============================================================================
-# Deep tech detection using httpx, whatweb, and wafw00f
-# Output used by the Smart Router (06_vuln_smart.py)
+# Deep fingerprinting - tech detection, WAF detection, etc.
+# This feeds the Smart Router with intelligence for scanning
 # ============================================================================
 
-set -euo pipefail
+# Don't exit on errors - tools may fail without meaning module failure
+set -uo pipefail
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-RED='\033[0;31m'
-NC='\033[0m'
+# Interrupt handling
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "${SCRIPT_DIR}/../lib/interrupt.sh" ]] && source "${SCRIPT_DIR}/../lib/interrupt.sh" && install_module_handler
+# Source config library
+[[ -f "${SCRIPT_DIR}/../lib/config.sh" ]] && source "${SCRIPT_DIR}/../lib/config.sh"
+# Source logging library (centralized log(), count_lines(), get_threads(), get_rate_limit())
+[[ -f "${SCRIPT_DIR}/../lib/logging.sh" ]] && source "${SCRIPT_DIR}/../lib/logging.sh"
+set_log_module "FINGERPRINT"
 
 PROBE_DIR="${OUTPUT_BASE}/probed"
 FINGER_DIR="${OUTPUT_BASE}/fingerprint"
 
-log() {
-    local level="$1"; shift
-    case "$level" in
-        INFO) echo -e "${GREEN}[FINGERPRINT]${NC} $*" ;;
-        WARN) echo -e "${YELLOW}[FINGERPRINT]${NC} $*" ;;
-        TASK) echo -e "${CYAN}[FINGERPRINT]${NC} $*" ;;
-        ALERT) echo -e "${RED}[FINGERPRINT]${NC} $*" ;;
-    esac
-}
-
-count_lines() {
-    [[ -f "$1" ]] && wc -l < "$1" | tr -d ' ' || echo "0"
-}
-
-get_threads() {
-    if [[ -n "${THREADS:-}" ]]; then
-        echo "$THREADS"
-    elif [[ "${AGGRESSIVE_MODE:-false}" == true ]]; then
-        echo "50"
-    elif [[ "${STEALTH_MODE:-false}" == true ]]; then
-        echo "5"
-    else
-        echo "25"
+# ============================================================================
+# HELPER: Create live_hosts.txt from TARGET for standalone mode
+# ============================================================================
+ensure_live_hosts_exist() {
+    local hosts_file="${PROBE_DIR}/live_hosts.txt"
+    
+    if [[ ! -f "$hosts_file" ]]; then
+        if [[ -n "${TARGET:-}" ]]; then
+            log INFO "Creating live hosts from target: $TARGET"
+            mkdir -p "${PROBE_DIR}"
+            echo "https://${TARGET}" > "$hosts_file"
+            echo "http://${TARGET}" >> "$hosts_file"
+        else
+            return 1
+        fi
     fi
+    return 0
 }
 
 # ============================================================================
@@ -54,8 +50,9 @@ run_httpx_fingerprint() {
     local output="${FINGER_DIR}/httpx_tech.json"
     local threads=$(get_threads)
     
-    if [[ ! -f "$input" ]]; then
-        log WARN "No live hosts file found"
+    # Ensure live_hosts.txt exists (create from TARGET if needed)
+    if ! ensure_live_hosts_exist; then
+        log WARN "No live hosts file found and no TARGET specified"
         return 1
     fi
     
@@ -166,21 +163,28 @@ run_wafw00f() {
         return
     fi
     
+    # Clear previous results
+    > "$output"
+    > "$output_json"
+    
     # Limit WAF detection to first 200 hosts
     local max_hosts=200
+    local count=0
     
     head -"$max_hosts" "$input" | while IFS= read -r url; do
-        wafw00f "$url" -o "$output" -f json 2>/dev/null || true
+        ((count++))
+        # Run wafw00f and append to output (not overwrite)
+        wafw00f "$url" 2>/dev/null >> "$output" || true
     done
     
     # Merge WAF results
-    if [[ -f "$output" ]]; then
+    if [[ -f "$output" ]] && [[ -s "$output" ]]; then
         # Parse known WAFs
-        grep -i "cloudflare" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_cloudflare.flag" || true
-        grep -i "akamai" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_akamai.flag" || true
-        grep -i "aws" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_aws.flag" || true
-        grep -i "incapsula" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_incapsula.flag" || true
-        grep -i "sucuri" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_sucuri.flag" || true
+        grep -qi "cloudflare" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_cloudflare.flag" || true
+        grep -qi "akamai" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_akamai.flag" || true
+        grep -qi "aws" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_aws.flag" || true
+        grep -qi "incapsula" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_incapsula.flag" || true
+        grep -qi "sucuri" "$output" 2>/dev/null && touch "${FINGER_DIR}/waf_sucuri.flag" || true
     fi
     
     log INFO "WAF detection complete"
@@ -355,40 +359,6 @@ PYTHON_SCRIPT
 }
 
 # ============================================================================
-# SCREENSHOTS (OPTIONAL)
-# ============================================================================
-take_screenshots() {
-    if [[ "${FAST_MODE:-false}" == true ]]; then
-        log WARN "Skipping screenshots in fast mode"
-        return
-    fi
-    
-    if ! command -v gowitness &>/dev/null; then
-        log WARN "Gowitness not available, skipping screenshots..."
-        return
-    fi
-    
-    log TASK "Taking screenshots..."
-    
-    local input="${PROBE_DIR}/live_hosts.txt"
-    local output_dir="${OUTPUT_BASE}/screenshots"
-    
-    mkdir -p "$output_dir"
-    
-    # Limit to first 100 hosts
-    head -100 "$input" > "${output_dir}/screenshot_input.txt"
-    
-    gowitness file \
-        -f "${output_dir}/screenshot_input.txt" \
-        -P "$output_dir" \
-        --timeout 10 \
-        --disable-logging \
-        2>/dev/null || true
-    
-    log INFO "Screenshots saved to $output_dir"
-}
-
-# ============================================================================
 # MAIN
 # ============================================================================
 main() {
@@ -413,9 +383,6 @@ main() {
     consolidate_fingerprints
     generate_target_lists
     
-    # Optional screenshots
-    take_screenshots
-    
     echo ""
     echo "════════════════════════════════════════════════════════════"
     echo "  FINGERPRINTING COMPLETE"
@@ -425,3 +392,4 @@ main() {
 }
 
 main "$@"
+

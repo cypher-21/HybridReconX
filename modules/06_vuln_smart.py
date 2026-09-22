@@ -21,6 +21,7 @@ The Smart Router implements:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -30,21 +31,21 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
+# Add lib to path for shared imports
+sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
+
 try:
     import yaml
-    from rich.console import Console
     from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
 except ImportError:
-    # Fallback if rich not available
-    class Console:
-        def print(self, *args, **kwargs):
-            print(*args)
-        def log(self, *args, **kwargs):
-            print(*args)
     yaml = None
 
-console = Console()
+# Import shared utilities (console, signal handling, ScanConfig, run_command)
+from scan_utils import console, is_interrupted, reset_interrupt, ScanConfig, run_command
+
+# Import centralized tool registry
+from tool_registry import ToolRegistry
+
 
 
 # ============================================================================
@@ -86,18 +87,7 @@ class TargetInfo:
         return any(w.lower() in waf_lower for w in waf_names)
 
 
-@dataclass
-class ScanConfig:
-    """Configuration for scanning."""
-    output_dir: str
-    config_file: str = ""
-    fast_mode: bool = False
-    stealth_mode: bool = False
-    threads: int = 25
-    rate_limit: int = 150
-    allow_destructive: bool = False
-    nuclei_severity: str = "critical,high,medium"
-    blind_xss_callback: str = ""
+# ScanConfig is imported from lib/scan_utils.py
 
 
 # ============================================================================
@@ -241,43 +231,44 @@ class ScannerExecutor:
         self.vuln_dir.mkdir(parents=True, exist_ok=True)
     
     def run_command(self, cmd: List[str], output_file: Optional[str] = None,
-                    timeout: int = 3600) -> Tuple[bool, str]:
-        """Run a command and capture output."""
-        try:
-            console.log(f"[cyan]Running:[/cyan] {' '.join(cmd[:3])}...")
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
-            
-            output = result.stdout + result.stderr
-            
-            if output_file:
-                with open(output_file, 'w') as f:
-                    f.write(output)
-            
-            return result.returncode == 0, output
-            
-        except subprocess.TimeoutExpired:
-            console.log(f"[yellow]Command timed out after {timeout}s[/yellow]")
-            return False, "Timeout"
-        except Exception as e:
-            console.log(f"[red]Command failed: {e}[/red]")
-            return False, str(e)
+                    timeout: int = 3600) -> Tuple[bool, str, int]:
+        """Run a command and capture output. Delegates to shared run_command()."""
+        return run_command(cmd, output_file=output_file, timeout=timeout)
     
     def run_nuclei(self, targets: List[str], tags: List[str] = None,
                    templates: List[str] = None, output_name: str = "nuclei") -> bool:
         """Run Nuclei scanner with specific tags/templates."""
         if not targets:
+            console.log("[yellow]No targets for Nuclei scan[/yellow]")
             return False
         
-        # Write targets to file
+        # Check if nuclei is available
+        if not ToolRegistry.is_available('nuclei'):
+            console.log("[red]Nuclei not available, skipping...[/red]")
+            return False
+        
+        console.log(f"[green]Running Nuclei on {len(targets)} targets[/green]")
+        
+        # Write targets to file - one per line
         targets_file = self.vuln_dir / f"{output_name}_targets.txt"
-        with open(targets_file, 'w') as f:
-            f.write('\n'.join(targets))
+        try:
+            with open(targets_file, 'w') as f:
+                for target in targets:
+                    if target and target.strip():
+                        f.write(target.strip() + '\n')
+        except Exception as e:
+            console.log(f"[red]Failed to write targets file: {e}[/red]")
+            return False
+        
+        # Verify file was created and has content
+        if not targets_file.exists() or targets_file.stat().st_size == 0:
+            console.log("[red]Targets file is empty or not created[/red]")
+            return False
+        
+        console.log(f"[cyan]Targets file: {targets_file} ({targets_file.stat().st_size} bytes)[/cyan]")
+        
+        results_txt = self.vuln_dir / f"{output_name}_results.txt"
+        results_json = self.vuln_dir / f"{output_name}_results.json"
         
         cmd = [
             'nuclei',
@@ -285,10 +276,8 @@ class ScannerExecutor:
             '-s', self.config.nuclei_severity,
             '-c', str(self.config.threads),
             '-rl', str(self.config.rate_limit),
-            '-silent',
-            '-o', str(self.vuln_dir / f"{output_name}_results.txt"),
-            '-json',
-            '-je', str(self.vuln_dir / f"{output_name}_results.json"),
+            '-o', str(results_txt),
+            '-je', str(results_json),
         ]
         
         if tags:
@@ -298,18 +287,104 @@ class ScannerExecutor:
             for t in templates:
                 cmd.extend(['-t', t])
         
-        success, _ = self.run_command(cmd)
+        success, output, ret_code = self.run_command(cmd)
+        
+        # Verify results were created
+        if results_txt.exists():
+            line_count = sum(1 for _ in open(results_txt))
+            console.log(f"[green]Nuclei found {line_count} results[/green]")
+        else:
+            console.log("[yellow]No Nuclei text results generated[/yellow]")
+        
         return success
+    
+    def run_nuclei_automatic(self, targets: List[str], output_name: str = "nuclei_auto") -> bool:
+        """
+        Run Nuclei with -automatic-scan flag.
+        
+        This uses wappalyzer integration for smart template selection
+        based on detected technologies. More efficient and accurate.
+        """
+        if not targets:
+            console.log("[yellow]No targets for Nuclei automatic scan[/yellow]")
+            return False
+        
+        if not ToolRegistry.is_available('nuclei'):
+            console.log("[red]Nuclei not available, skipping...[/red]")
+            return False
+        
+        console.log(f"[green]Running Nuclei AUTOMATIC scan on {len(targets)} targets[/green]")
+        console.log("[cyan]Using wappalyzer for smart template selection...[/cyan]")
+        
+        # Write targets to file
+        targets_file = self.vuln_dir / f"{output_name}_targets.txt"
+        with open(targets_file, 'w') as f:
+            for target in targets:
+                if target and target.strip():
+                    f.write(target.strip() + '\n')
+        
+        if not targets_file.exists() or targets_file.stat().st_size == 0:
+            console.log("[red]Targets file is empty[/red]")
+            return False
+        
+        results_txt = self.vuln_dir / f"{output_name}_results.txt"
+        results_json = self.vuln_dir / f"{output_name}_results.json"
+        
+        cmd = [
+            'nuclei',
+            '-l', str(targets_file),
+            '-automatic-scan',  # Smart template selection
+            '-s', self.config.nuclei_severity,
+            '-c', str(min(self.config.threads, 25)),  # Lower threads for automatic
+            '-rl', str(self.config.rate_limit),
+            '-o', str(results_txt),
+            '-je', str(results_json),
+            '-stats',  # Show progress stats
+        ]
+        
+        success, output, ret_code = self.run_command(cmd, timeout=1800)  # 30 min timeout
+        
+        if results_txt.exists():
+            line_count = sum(1 for _ in open(results_txt))
+            console.log(f"[green]Nuclei automatic scan found {line_count} results[/green]")
+        
+        return success
+    
+    def _get_wpscan_token(self) -> Optional[str]:
+        """Get WPScan API token from config."""
+        try:
+            if self.config.config_file and os.path.exists(self.config.config_file):
+                import yaml
+                with open(self.config.config_file, 'r') as f:
+                    config_data = yaml.safe_load(f) or {}
+                # Try both locations
+                token = config_data.get('api_keys', {}).get('wpscan_token', '')
+                if not token:
+                    token = config_data.get('modules', {}).get('cms', {}).get('wordpress', {}).get('wpscan', {}).get('api_token', '')
+                return token if token else None
+        except Exception:
+            pass
+        return None
     
     def run_wpscan(self, targets: List[str]) -> bool:
         """Run WPScan on WordPress targets."""
         if not targets:
             return False
         
+        # Check if wpscan is available
+        if not ToolRegistry.is_available('wpscan'):
+            console.log("[yellow]WPScan not available, skipping...[/yellow]")
+            return False
+        
         console.log(f"[green]Running WPScan on {len(targets)} WordPress targets[/green]")
         
         results_dir = self.vuln_dir / 'wpscan'
         results_dir.mkdir(exist_ok=True)
+        
+        # Get API token
+        api_token = self._get_wpscan_token()
+        if api_token:
+            console.log("[cyan]Using WPScan API token[/cyan]")
         
         for target in targets[:20]:  # Limit to 20 targets
             safe_name = urlparse(target).netloc.replace('.', '_').replace(':', '_')
@@ -324,6 +399,10 @@ class ScannerExecutor:
                 '--random-user-agent',
             ]
             
+            # Add API token if available
+            if api_token:
+                cmd.extend(['--api-token', api_token])
+            
             if self.config.stealth_mode:
                 cmd.extend(['--throttle', '2000'])
             
@@ -336,6 +415,12 @@ class ScannerExecutor:
         if not targets:
             return False
         
+        # Find JoomScan
+        joomscan_path = ToolRegistry.find_tool('joomscan')
+        if not joomscan_path:
+            console.log("[yellow]JoomScan not available, skipping...[/yellow]")
+            return False
+        
         console.log(f"[green]Running JoomScan on {len(targets)} Joomla targets[/green]")
         
         results_dir = self.vuln_dir / 'joomscan'
@@ -344,10 +429,11 @@ class ScannerExecutor:
         for target in targets[:10]:
             safe_name = urlparse(target).netloc.replace('.', '_')
             
-            cmd = [
-                'perl', '/opt/tools/joomscan/joomscan.pl',
-                '-u', target,
-            ]
+            # Build command based on path type
+            if joomscan_path.endswith('.pl'):
+                cmd = ['perl', joomscan_path, '-u', target]
+            else:
+                cmd = [joomscan_path, '-u', target]
             
             self.run_command(cmd, str(results_dir / f"{safe_name}.txt"), timeout=300)
         
@@ -356,6 +442,11 @@ class ScannerExecutor:
     def run_droopescan(self, targets: List[str], cms: str = 'drupal') -> bool:
         """Run Droopescan on Drupal targets."""
         if not targets:
+            return False
+        
+        # Check if droopescan is available
+        if not ToolRegistry.is_available('droopescan'):
+            console.log("[yellow]Droopescan not available, skipping...[/yellow]")
             return False
         
         console.log(f"[green]Running Droopescan on {len(targets)} {cms} targets[/green]")
@@ -379,12 +470,19 @@ class ScannerExecutor:
     def run_dalfox(self, targets_file: str) -> bool:
         """Run Dalfox XSS scanner."""
         if not os.path.exists(targets_file):
+            console.log("[yellow]No XSS candidates file found[/yellow]")
+            return False
+        
+        # Check if dalfox is available
+        if not ToolRegistry.is_available('dalfox'):
+            console.log("[yellow]Dalfox not available, skipping...[/yellow]")
             return False
         
         with open(targets_file, 'r') as f:
-            target_count = len(f.readlines())
+            target_count = len([line for line in f if line.strip()])
         
         if target_count == 0:
+            console.log("[yellow]XSS candidates file is empty[/yellow]")
             return False
         
         console.log(f"[green]Running Dalfox on {target_count} XSS candidates[/green]")
@@ -403,18 +501,25 @@ class ScannerExecutor:
         if self.config.stealth_mode:
             cmd.extend(['--delay', '1000'])
         
-        success, _ = self.run_command(cmd, timeout=1800)
+        success, _, _ = self.run_command(cmd, timeout=1800)
         return success
     
     def run_ghauri(self, targets_file: str) -> bool:
         """Run Ghauri SQLi scanner."""
         if not os.path.exists(targets_file):
+            console.log("[yellow]No SQLi candidates file found[/yellow]")
+            return False
+        
+        # Check if ghauri is available
+        if not ToolRegistry.is_available('ghauri'):
+            console.log("[yellow]Ghauri not available, skipping...[/yellow]")
             return False
         
         with open(targets_file, 'r') as f:
             targets = [line.strip() for line in f if line.strip()]
         
         if not targets:
+            console.log("[yellow]SQLi candidates file is empty[/yellow]")
             return False
         
         console.log(f"[green]Running Ghauri on {len(targets)} SQLi candidates[/green]")
@@ -435,6 +540,63 @@ class ScannerExecutor:
             
             self.run_command(cmd, timeout=300)
         
+        return True
+    
+    def run_cvemap(self) -> bool:
+        """Run CVEmap for CVE prioritization based on scan findings."""
+        # Check if cvemap is available
+        cvemap_path = shutil.which('cvemap')
+        if not cvemap_path:
+            console.log("[yellow]cvemap not available, skipping CVE prioritization...[/yellow]")
+            return False
+        
+        console.log("[green]Running CVEmap for CVE prioritization[/green]")
+        
+        # Look for nuclei JSON results to extract CVEs
+        nuclei_results = list(self.vuln_dir.glob('*_results.json'))
+        if not nuclei_results:
+            console.log("[yellow]No nuclei results found for CVE mapping[/yellow]")
+            return False
+        
+        cve_list = set()
+        
+        # Extract CVE IDs from nuclei results
+        for result_file in nuclei_results:
+            try:
+                with open(result_file, 'r') as f:
+                    for line in f:
+                        if 'CVE-' in line:
+                            import re
+                            cves = re.findall(r'CVE-\d{4}-\d+', line)
+                            cve_list.update(cves)
+            except Exception:
+                continue
+        
+        if not cve_list:
+            console.log("[yellow]No CVEs found in scan results[/yellow]")
+            return False
+        
+        console.log(f"[green]Found {len(cve_list)} unique CVEs, running priority analysis[/green]")
+        
+        # Write CVEs to file
+        cve_file = self.vuln_dir / 'cve_list.txt'
+        with open(cve_file, 'w') as f:
+            f.write('\n'.join(sorted(cve_list)))
+        
+        # Run cvemap for each CVE
+        output_file = self.vuln_dir / 'cvemap_results.json'
+        
+        for cve in list(cve_list)[:20]:  # Limit to 20 CVEs
+            cmd = ['cvemap', '-id', cve, '-json']
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if result.stdout:
+                    with open(output_file, 'a') as f:
+                        f.write(result.stdout + '\n')
+            except Exception:
+                continue
+        
+        console.log(f"[green]CVEmap results saved to {output_file}[/green]")
         return True
 
 
@@ -687,31 +849,38 @@ class SmartRouter:
             # Run with critical templates first
             console.log(f"[green]Running Nuclei on {len(all_targets)} targets[/green]")
             
+            # Standard templates
+            templates = [
+                'cves/',
+                'vulnerabilities/',
+                'exposures/',
+                'misconfiguration/',
+                'takeovers/',
+            ]
+            
+            # Add custom templates if they exist
+            custom_templates_dir = Path('/hybridrecon/.data/nuclei-custom-templates/')
+            if custom_templates_dir.exists():
+                templates.append(str(custom_templates_dir))
+                console.log(f"[cyan]Including custom Nuclei templates[/cyan]")
+            
             self.executor.run_nuclei(
                 all_targets,
-                templates=[
-                    'cves/',
-                    'vulnerabilities/',
-                    'exposures/',
-                    'misconfiguration/',
-                    'takeovers/',
-                ],
+                templates=templates,
                 output_name='nuclei_general'
             )
     
     def run_injection_scanners(self):
-        """Run XSS, SQLi, and other injection scanners."""
-        console.log("\n[bold cyan]═══ INJECTION SCANNERS ═══[/bold cyan]")
+        """Run lightweight injection detection (deep scanning in Module 07)."""
+        console.log("\n[bold cyan]═══ INJECTION DETECTION ═══[/bold cyan]")
+        console.log("[cyan]Note: XSS (Dalfox) moved to Module 07 with XSStrike[/cyan]")
         
-        # XSS scanning
-        xss_file = self.param_dir / 'gf_xss.txt'
-        if xss_file.exists():
-            self.executor.run_dalfox(str(xss_file))
-        
-        # SQLi scanning
+        # SQLi detection only - deep SQLMap testing in Module 07
         sqli_file = self.param_dir / 'gf_sqli.txt'
         if sqli_file.exists():
             self.executor.run_ghauri(str(sqli_file))
+        else:
+            console.log("[yellow]No SQLi candidates file found[/yellow]")
     
     def route(self) -> bool:
         """Main routing method - the brain of the operation."""

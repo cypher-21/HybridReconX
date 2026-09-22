@@ -5,51 +5,20 @@
 # HTTPX probing for live hosts + Historical URL fetching
 # ============================================================================
 
-set -euo pipefail
+# Don't exit on errors - tools may fail without meaning module failure
+set -uo pipefail
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# Interrupt handling
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "${SCRIPT_DIR}/../lib/interrupt.sh" ]] && source "${SCRIPT_DIR}/../lib/interrupt.sh" && install_module_handler
+# Source config library
+[[ -f "${SCRIPT_DIR}/../lib/config.sh" ]] && source "${SCRIPT_DIR}/../lib/config.sh"
+# Source logging library (centralized log(), count_lines(), get_threads(), get_rate_limit())
+[[ -f "${SCRIPT_DIR}/../lib/logging.sh" ]] && source "${SCRIPT_DIR}/../lib/logging.sh"
+set_log_module "PROBE"
 
 PROBE_DIR="${OUTPUT_BASE}/probed"
 RECON_DIR="${OUTPUT_BASE}/recon"
-
-log() {
-    local level="$1"; shift
-    case "$level" in
-        INFO) echo -e "${GREEN}[PROBE]${NC} $*" ;;
-        WARN) echo -e "${YELLOW}[PROBE]${NC} $*" ;;
-        TASK) echo -e "${CYAN}[PROBE]${NC} $*" ;;
-    esac
-}
-
-count_lines() {
-    [[ -f "$1" ]] && wc -l < "$1" | tr -d ' ' || echo "0"
-}
-
-get_threads() {
-    if [[ -n "${THREADS:-}" ]]; then
-        echo "$THREADS"
-    elif [[ "${AGGRESSIVE_MODE:-false}" == true ]]; then
-        echo "100"
-    elif [[ "${STEALTH_MODE:-false}" == true ]]; then
-        echo "10"
-    else
-        echo "50"
-    fi
-}
-
-get_rate_limit() {
-    if [[ -n "${RATE_LIMIT:-}" ]]; then
-        echo "$RATE_LIMIT"
-    elif [[ "${STEALTH_MODE:-false}" == true ]]; then
-        echo "10"
-    else
-        echo "150"
-    fi
-}
 
 # ============================================================================
 # HTTPX PROBING (THE CORE)
@@ -161,17 +130,35 @@ run_waybackurls() {
 }
 
 # ============================================================================
-# MERGE HISTORICAL URLS
+# MERGE HISTORICAL URLS (with URO deduplication)
 # ============================================================================
 merge_historical_urls() {
     log TASK "Merging historical URLs..."
     
     local merged="${PROBE_DIR}/historical_urls.txt"
+    local deduped="${PROBE_DIR}/historical_deduped.txt"
     
     cat "${PROBE_DIR}"/gau_urls.txt "${PROBE_DIR}"/wayback_urls.txt 2>/dev/null | \
         sort -u | \
         grep -v "\.jpg$\|\.jpeg$\|\.png$\|\.gif$\|\.svg$\|\.ico$\|\.woff\|\.ttf\|\.css$" \
         > "$merged" 2>/dev/null || true
+    
+    local before=$(count_lines "$merged")
+    
+    # Use URO for smart URL deduplication (removes redundant URLs)
+    if command -v uro &>/dev/null && [[ -f "$merged" ]]; then
+        log INFO "Running URO for URL deduplication..."
+        cat "$merged" | uro > "$deduped" 2>/dev/null || cp "$merged" "$deduped"
+        local after=$(count_lines "$deduped")
+        if [[ $before -gt 0 ]]; then
+            log INFO "URO reduced URLs from $before to $after ($(( (before - after) * 100 / before ))% reduction)"
+        else
+            log INFO "URO processed $after URLs"
+        fi
+        mv "$deduped" "$merged"
+    else
+        log WARN "URO not found - install with: pip3 install uro"
+    fi
     
     # Filter for interesting extensions
     grep -iE "\.(php|asp|aspx|jsp|json|xml|txt|js|html|htm|action|do|cgi)(\?|$)" "$merged" 2>/dev/null | \

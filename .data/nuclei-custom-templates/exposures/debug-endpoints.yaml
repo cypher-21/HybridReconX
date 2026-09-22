@@ -1,0 +1,149 @@
+id: debug-endpoints
+
+info:
+  name: Debug Endpoints Exposure
+  author: HybridRecon-X
+  severity: medium
+  description: Detects exposed debug and development endpoints
+  tags: debug,exposure,development
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/debug"
+      - "{{BaseURL}}/debug/vars"
+      - "{{BaseURL}}/debug/pprof"
+      - "{{BaseURL}}/debug/pprof/goroutine"
+      - "{{BaseURL}}/debug/pprof/heap"
+      - "{{BaseURL}}/_debug"
+      - "{{BaseURL}}/__debug__"
+      - "{{BaseURL}}/trace"
+      - "{{BaseURL}}/stack"
+      - "{{BaseURL}}/status"
+      - "{{BaseURL}}/server-status"
+      - "{{BaseURL}}/server-info"
+
+    stop-at-first-match: true
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "goroutine"
+          - "runtime.main"
+          - "cmdline"
+          - "memstats"
+          - "Uptime"
+          - "TotalAccesses"
+          - "Server Version"
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - "DEBUG = True"
+          - "debug: true"
+          - "development mode"
+        condition: or
+---
+id: actuator-exposure
+
+info:
+  name: Spring Boot Actuator Exposure
+  author: HybridRecon-X
+  severity: high
+  description: Spring Boot actuator endpoints are exposed
+  tags: spring,actuator,exposure
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/actuator"
+      - "{{BaseURL}}/actuator/env"
+      - "{{BaseURL}}/actuator/health"
+      - "{{BaseURL}}/actuator/info"
+      - "{{BaseURL}}/actuator/metrics"
+      - "{{BaseURL}}/actuator/mappings"
+      - "{{BaseURL}}/actuator/beans"
+      - "{{BaseURL}}/actuator/configprops"
+      - "{{BaseURL}}/actuator/heapdump"
+      - "{{BaseURL}}/actuator/threaddump"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '"_links"'
+          - '"self"'
+          - '"health"'
+          - 'propertySources'
+          - 'activeProfiles'
+        condition: or
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: json
+        part: body
+        json:
+          - '.propertySources[].name'
+---
+id: env-file-exposure
+
+info:
+  name: Environment File Exposure
+  author: HybridRecon-X
+  severity: critical
+  description: Environment files containing sensitive data are exposed
+  tags: env,exposure,secrets
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.env"
+      - "{{BaseURL}}/.env.local"
+      - "{{BaseURL}}/.env.production"
+      - "{{BaseURL}}/.env.development"
+      - "{{BaseURL}}/.env.staging"
+      - "{{BaseURL}}/.env.backup"
+      - "{{BaseURL}}/.env.bak"
+      - "{{BaseURL}}/env"
+      - "{{BaseURL}}/app/.env"
+      - "{{BaseURL}}/application/.env"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "DB_PASSWORD"
+          - "DB_HOST"
+          - "API_KEY"
+          - "SECRET_KEY"
+          - "AWS_ACCESS"
+          - "STRIPE"
+          - "MYSQL_"
+          - "POSTGRES_"
+          - "MONGODB_"
+          - "REDIS_"
+          - "APP_KEY"
+          - "JWT_SECRET"
+        condition: or
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '([A-Z_]+)=(.+)'

@@ -9,7 +9,7 @@
 FROM kalilinux/kali-rolling
 
 LABEL maintainer="HybridRecon X Team"
-LABEL version="1.0.1"
+LABEL version="2.3.0"
 LABEL description="Context-Aware Bug Bounty Framework - The Smart Recon Platform"
 
 # ============================================================================
@@ -69,9 +69,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxslt1-dev \
     zlib1g-dev \
     libyaml-dev \
-    # Browser for screenshots (optional, large)
-    # chromium \
-    # chromium-driver \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -140,9 +137,6 @@ RUN git clone --depth 1 https://github.com/urbanadventurer/WhatWeb.git /opt/tool
 # 11. Wafw00f - WAF detection
 RUN pip3 install wafw00f --break-system-packages || true
 
-# 12. Gowitness - Web screenshot tool (optional, may fail without chrome)
-RUN go install -v github.com/sensepost/gowitness@latest || true
-
 # ============================================================================
 # SECTION C: CONTENT DISCOVERY (Fuzzing & Crawling)
 # ============================================================================
@@ -173,10 +167,11 @@ RUN wget -q https://github.com/epi052/feroxbuster/releases/latest/download/ferox
 # SECTION D: PARAMETER ANALYSIS
 # ============================================================================
 
-# 19. ParamSpider - Mining parameters from archives
-RUN git clone --depth 1 https://github.com/devanshbatham/ParamSpider /opt/tools/ParamSpider \
+# 19. ParamSpider - Mining parameters from archives (pip install method)
+RUN pip3 install paramspider --break-system-packages || \
+    (git clone --depth 1 https://github.com/devanshbatham/ParamSpider /opt/tools/ParamSpider \
     && cd /opt/tools/ParamSpider \
-    && pip3 install -r requirements.txt --break-system-packages || true
+    && pip3 install . --break-system-packages) || true
 
 # 20. Arjun - HTTP parameter discovery
 RUN pip3 install arjun --break-system-packages
@@ -205,12 +200,15 @@ RUN go install -v github.com/hahwul/dalfox/v2@latest
 RUN git clone --depth 1 https://github.com/s0md3v/XSStrike /opt/tools/XSStrike \
     && pip3 install -r /opt/tools/XSStrike/requirements.txt --break-system-packages || true
 
-# 26. Ghauri - SQLi detection tool (install from GitHub, not PyPI)
-RUN git clone --depth 1 https://github.com/r0oth3x49/ghauri.git /opt/tools/ghauri \
+# 26. Ghauri - SQLi detection tool
+# Install via pip which creates proper executable in /usr/local/bin
+RUN pip3 install ghauri --break-system-packages || \
+    (git clone --depth 1 https://github.com/r0oth3x49/ghauri.git /opt/tools/ghauri \
     && cd /opt/tools/ghauri \
     && pip3 install -r requirements.txt --break-system-packages || true \
-    && python3 setup.py install || pip3 install . --break-system-packages || true \
-    && ln -sf /opt/tools/ghauri/ghauri /usr/local/bin/ghauri 2>/dev/null || true
+    && pip3 install . --break-system-packages \
+    && chmod +x /opt/tools/ghauri/ghauri.py 2>/dev/null || true \
+    && ln -sf /opt/tools/ghauri/ghauri.py /usr/local/bin/ghauri 2>/dev/null || true)
 
 # 27. SQLMap - SQL injection tool (Gold standard)
 RUN git clone --depth 1 https://github.com/sqlmapproject/sqlmap /opt/tools/sqlmap
@@ -225,6 +223,63 @@ RUN git clone --depth 1 https://github.com/epinna/tplmap /opt/tools/tplmap \
 
 # 30. CVEmap - CVE prioritization
 RUN go install -v github.com/projectdiscovery/cvemap/cmd/cvemap@latest
+
+# ============================================================================
+# SECTION E2: NEW VULNERABILITY TOOLS (ENHANCED)
+# ============================================================================
+
+# 31. CRLFUZZ - CRLF injection scanner
+RUN go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
+
+# 32. Corsy - CORS misconfiguration scanner
+RUN pip3 install corsy --break-system-packages || \
+    (git clone --depth 1 https://github.com/s0md3v/Corsy /opt/tools/Corsy \
+    && pip3 install -r /opt/tools/Corsy/requirements.txt --break-system-packages || true)
+
+# 33. testssl.sh - SSL/TLS testing
+RUN git clone --depth 1 https://github.com/drwetter/testssl.sh /opt/tools/testssl.sh \
+    && ln -sf /opt/tools/testssl.sh/testssl.sh /usr/local/bin/testssl || true
+
+# 34. lfimap - LFI automation
+RUN pip3 install lfimap --break-system-packages || true
+
+# 35. SSRFmap - SSRF exploitation
+RUN git clone --depth 1 https://github.com/swisskyrepo/SSRFmap /opt/tools/SSRFmap \
+    && pip3 install -r /opt/tools/SSRFmap/requirements.txt --break-system-packages || true
+
+# 36. smuggler - HTTP request smuggling
+RUN git clone --depth 1 https://github.com/defparam/smuggler /opt/tools/smuggler || true
+
+# 37. ppmap - Prototype pollution scanner
+RUN go install -v github.com/nicholaskell/ppmap@latest || true
+
+# 38. nomore403 - 4xx bypass tool
+RUN go install -v github.com/devploit/nomore403@latest || true
+
+# 39. Oralyzer - Open redirect scanner
+RUN pip3 install oralyzer --break-system-packages || true
+
+# ============================================================================
+# SECTION E3: ENHANCED RECON TOOLS
+# ============================================================================
+
+# 40. tlsx - TLS analysis
+RUN go install -v github.com/projectdiscovery/tlsx/cmd/tlsx@latest || true
+
+# 41. dnstake - Subdomain takeover detection
+RUN go install -v github.com/pwnesia/dnstake/cmd/dnstake@latest || true
+
+# 42. gotator - Subdomain permutations
+RUN go install -v github.com/Josue87/gotator@latest || true
+
+# 43. shortscan - IIS shortname scanner
+RUN go install -v github.com/bitquark/shortscan/cmd/shortscan@latest || true
+
+# 44. xnLinkFinder - JS endpoint discovery
+RUN pip3 install xnLinkFinder --break-system-packages || true
+
+# 45. jsluice - JS secret extraction
+RUN go install -v github.com/BishopFox/jsluice/cmd/jsluice@latest || true
 
 # ============================================================================
 # SECTION F: CMS & SPECIFIC SCANNERS
@@ -307,7 +362,16 @@ RUN wget -q https://raw.githubusercontent.com/trickest/resolvers/main/resolvers-
 RUN nuclei -update-templates -silent || true
 
 # ============================================================================
-# PYTHON DEPENDENCIES
+# SYMLINKS FOR TOOL ACCESS (Before COPY - these don't change often)
+# ============================================================================
+RUN ln -sf /opt/tools/sqlmap/sqlmap.py /usr/local/bin/sqlmap || true \
+    && ln -sf /opt/tools/commix/commix.py /usr/local/bin/commix || true \
+    && ln -sf /opt/tools/XSStrike/xsstrike.py /usr/local/bin/xsstrike || true \
+    && ln -sf /opt/tools/tplmap/tplmap.py /usr/local/bin/tplmap || true \
+    && ln -sf /opt/tools/joomscan/joomscan.pl /usr/local/bin/joomscan || true
+
+# ============================================================================
+# PYTHON DEPENDENCIES (Copy requirements.txt first for better caching)
 # ============================================================================
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt --break-system-packages || \
@@ -319,22 +383,17 @@ RUN pip3 install -r /tmp/requirements.txt --break-system-packages || \
 # ============================================================================
 WORKDIR /hybridrecon
 
-# Copy the framework
+# ============================================================================
+# COPY FRAMEWORK CODE (Last step before HEALTHCHECK - changes most often)
+# This is intentionally at the END so tool installation layers are cached
+# ============================================================================
 COPY . /hybridrecon/
 
 # Make scripts executable
 RUN chmod +x /hybridrecon/hybrid_x.sh 2>/dev/null || true \
     && chmod +x /hybridrecon/modules/*.sh 2>/dev/null || true \
-    && chmod +x /hybridrecon/modules/*.py 2>/dev/null || true
-
-# ============================================================================
-# SYMLINKS FOR TOOL ACCESS
-# ============================================================================
-RUN ln -sf /opt/tools/sqlmap/sqlmap.py /usr/local/bin/sqlmap || true \
-    && ln -sf /opt/tools/commix/commix.py /usr/local/bin/commix || true \
-    && ln -sf /opt/tools/XSStrike/xsstrike.py /usr/local/bin/xsstrike || true \
-    && ln -sf /opt/tools/tplmap/tplmap.py /usr/local/bin/tplmap || true \
-    && ln -sf /opt/tools/joomscan/joomscan.pl /usr/local/bin/joomscan || true
+    && chmod +x /hybridrecon/modules/*.py 2>/dev/null || true \
+    && chmod +x /hybridrecon/lib/*.py 2>/dev/null || true
 
 # ============================================================================
 # HEALTHCHECK
@@ -349,3 +408,4 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
 # - docker run ... bash          (interactive)
 # - docker run ... ./hybrid_x.sh (script mode)
 CMD ["/bin/bash"]
+

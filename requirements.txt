@@ -26,5 +26,6 @@ loguru>=0.7.0
 # Progress bars
 tqdm>=4.60.0
 
-# DNS utilities
+# DNS & Domain utilities
 dnspython>=2.3.0
+tldextract>=5.1.0

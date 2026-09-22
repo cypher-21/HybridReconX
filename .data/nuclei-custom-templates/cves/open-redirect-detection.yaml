@@ -1,0 +1,69 @@
+id: open-redirect-detection
+info:
+  name: Open Redirect Vulnerability Detection
+  author: hybridrecon-x
+  severity: medium
+  description: Detects open redirect vulnerabilities in common parameters
+  tags: cve,redirect,owasp
+  classification:
+    cve-id: CVE-2023-REDIRECT
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/{{path}}?{{param}}=https://evil.com"
+      - "{{BaseURL}}/{{path}}?{{param}}=//evil.com"
+      - "{{BaseURL}}/{{path}}?{{param}}=/\\/evil.com"
+      - "{{BaseURL}}/{{path}}?{{param}}=https:evil.com"
+
+    payloads:
+      path:
+        - login
+        - logout
+        - redirect
+        - auth
+        - oauth
+        - callback
+        - return
+        - next
+        - continue
+        - go
+      param:
+        - redirect
+        - redirect_uri
+        - redirect_url
+        - next
+        - next_url
+        - return
+        - return_url
+        - returnUrl
+        - returnTo
+        - goto
+        - target
+        - dest
+        - destination
+        - url
+        - uri
+        - continue
+        - forward
+        - callback
+        - redir
+
+    attack: clusterbomb
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "(?i)location:\\s*https?://evil\\.com"
+          - "(?i)location:\\s*//evil\\.com"
+
+      - type: status
+        status:
+          - 301
+          - 302
+          - 303
+          - 307
+          - 308

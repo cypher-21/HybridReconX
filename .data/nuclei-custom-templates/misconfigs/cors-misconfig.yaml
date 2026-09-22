@@ -1,0 +1,62 @@
+id: cors-misconfiguration
+info:
+  name: CORS Misconfiguration Detection
+  author: hybridrecon-x
+  severity: medium
+  description: Detects dangerous CORS misconfigurations including reflected origins and wildcard
+  tags: misconfig,cors,security
+  reference:
+    - https://portswigger.net/web-security/cors
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+    
+    headers:
+      Origin: "https://evil.com"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "Access-Control-Allow-Origin: https://evil.com"
+          - "Access-Control-Allow-Origin: *"
+          - "Access-Control-Allow-Credentials: true"
+        condition: or
+
+      - type: status
+        status:
+          - 200
+          - 204
+
+---
+
+id: cors-null-origin
+info:
+  name: CORS Null Origin Misconfiguration
+  author: hybridrecon-x
+  severity: high
+  description: Detects CORS misconfiguration allowing null origin
+  tags: misconfig,cors,security
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+    
+    headers:
+      Origin: "null"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "Access-Control-Allow-Origin: null"
+
+      - type: word
+        part: header
+        words:
+          - "Access-Control-Allow-Credentials: true"

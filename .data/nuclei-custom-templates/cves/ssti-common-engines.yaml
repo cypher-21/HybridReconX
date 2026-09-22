@@ -1,0 +1,63 @@
+id: ssti-common-engines
+info:
+  name: Server-Side Template Injection Detection
+  author: hybridrecon-x
+  severity: critical
+  description: Detects SSTI in common template engines (Jinja2, Twig, Freemarker, etc)
+  tags: cve,ssti,rce
+  classification:
+    cve-id: CVE-2023-SSTI
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/{{path}}?{{param}}={{payload}}"
+
+    payloads:
+      path:
+        - search
+        - template
+        - render
+        - view
+        - page
+        - preview
+        - content
+      param:
+        - q
+        - search
+        - query
+        - name
+        - title
+        - message
+        - content
+        - template
+        - text
+      payload:
+        - "{{7*7}}"
+        - "${7*7}"
+        - "{{49}}"
+        - "<%= 7*7 %>"
+        - "#{7*7}"
+        - "*{7*7}"
+        - "@(7*7)"
+
+    attack: clusterbomb
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "49"
+
+      - type: word
+        part: body
+        words:
+          - "{{7*7}}"
+          - "${7*7}"
+        negative: true
+
+      - type: status
+        status:
+          - 200

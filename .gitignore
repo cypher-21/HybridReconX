@@ -1,0 +1,66 @@
+# ============================================================================
+# HYBRIDRECON X - Git Ignore
+# ============================================================================
+
+# Output directories
+output/
+output
+
+# State files
+.hybridrecon_state/
+*.checkpoint
+*.state
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+.env
+.env.local
+*.key
+*.pem
+secrets/
+
+# User config (contains API keys, webhook URLs, etc.)
+# Use config.yaml.example as template
+config.yaml
+
+# Temp
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Large files
+*.zip
+*.tar.gz
+*.7z
+wordlists_backup/

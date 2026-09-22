@@ -1,0 +1,43 @@
+id: git-config-exposure
+
+info:
+  name: Git Config Exposure
+  author: HybridRecon-X
+  severity: high
+  description: Git configuration file is exposed revealing repository information
+  tags: git,exposure,config
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.git/config"
+      - "{{BaseURL}}/.git/HEAD"
+      - "{{BaseURL}}/.git/index"
+      - "{{BaseURL}}/.git/logs/HEAD"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "[core]"
+          - "[remote"
+          - "repositoryformatversion"
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - "ref: refs/heads/"
+        condition: and
+
+      - type: binary
+        part: body
+        binary:
+          - "4449524300"  # DIRC (git index header)
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - 'url = (.+)'

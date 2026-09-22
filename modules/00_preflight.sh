@@ -5,22 +5,17 @@
 # Validates environment, connectivity, and updates before scan
 # ============================================================================
 
-set -euo pipefail
+# Note: -e removed intentionally - we handle errors explicitly
+set -uo pipefail
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-log() {
-    local level="$1"; shift
-    case "$level" in
-        INFO) echo -e "${GREEN}[PREFLIGHT]${NC} $*" ;;
-        WARN) echo -e "${YELLOW}[PREFLIGHT]${NC} $*" ;;
-        ERROR) echo -e "${RED}[PREFLIGHT]${NC} $*" ;;
-    esac
-}
+# Interrupt handling
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "${SCRIPT_DIR}/../lib/interrupt.sh" ]] && source "${SCRIPT_DIR}/../lib/interrupt.sh" && install_module_handler
+# Source config library
+[[ -f "${SCRIPT_DIR}/../lib/config.sh" ]] && source "${SCRIPT_DIR}/../lib/config.sh"
+# Source logging library (centralized log(), count_lines(), get_threads())
+[[ -f "${SCRIPT_DIR}/../lib/logging.sh" ]] && source "${SCRIPT_DIR}/../lib/logging.sh"
+set_log_module "PREFLIGHT"
 
 # ============================================================================
 # NETWORK CONNECTIVITY CHECK
@@ -269,7 +264,7 @@ create_output_structure() {
         "cloud"
         "reports"
         "logs"
-        "screenshots"
+        "intel"
     )
     
     for dir in "${dirs[@]}"; do

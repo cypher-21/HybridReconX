@@ -1,0 +1,115 @@
+id: graphql-introspection
+
+info:
+  name: GraphQL Introspection Enabled
+  author: HybridRecon-X
+  severity: medium
+  description: GraphQL introspection is enabled, allowing schema discovery
+  tags: graphql,api,exposure
+
+requests:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/v1/graphql"
+      - "{{BaseURL}}/graphql/console"
+      - "{{BaseURL}}/query"
+
+    headers:
+      Content-Type: application/json
+
+    body: '{"query":"query{__schema{types{name}}}"}'
+
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '"__schema"'
+          - '"types"'
+          - '"name"'
+        condition: and
+
+    extractors:
+      - type: json
+        part: body
+        json:
+          - '.data.__schema.types[].name'
+---
+id: swagger-exposure
+
+info:
+  name: Swagger/OpenAPI Documentation Exposure
+  author: HybridRecon-X
+  severity: info
+  description: Swagger or OpenAPI documentation is publicly accessible
+  tags: swagger,api,documentation
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/swagger-ui.html"
+      - "{{BaseURL}}/swagger-ui/"
+      - "{{BaseURL}}/swagger.json"
+      - "{{BaseURL}}/swagger.yaml"
+      - "{{BaseURL}}/api-docs"
+      - "{{BaseURL}}/v1/api-docs"
+      - "{{BaseURL}}/v2/api-docs"
+      - "{{BaseURL}}/v3/api-docs"
+      - "{{BaseURL}}/openapi.json"
+      - "{{BaseURL}}/openapi.yaml"
+      - "{{BaseURL}}/api/swagger"
+      - "{{BaseURL}}/redoc"
+      - "{{BaseURL}}/docs"
+
+    stop-at-first-match: true
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "swagger"
+          - "openapi"
+          - '"paths"'
+          - '"info"'
+          - '"basePath"'
+          - "Swagger UI"
+        condition: or
+
+      - type: status
+        status:
+          - 200
+---
+id: api-key-in-url
+
+info:
+  name: API Key in URL
+  author: HybridRecon-X
+  severity: high
+  description: Detects API keys or tokens exposed in URLs
+  tags: api,secret,exposure
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - 'api[_-]?key["\s]*[:=]["\s]*[A-Za-z0-9_\-]{16,}'
+          - 'apikey["\s]*[:=]["\s]*[A-Za-z0-9_\-]{16,}'
+          - 'access[_-]?token["\s]*[:=]["\s]*[A-Za-z0-9_\-]{16,}'
+          - 'secret[_-]?key["\s]*[:=]["\s]*[A-Za-z0-9_\-]{16,}'
+          - 'AKIA[A-Z0-9]{16}'
+          - 'eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*'
+        condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - 'api[_-]?key["\s]*[:=]["\s]*([A-Za-z0-9_\-]{16,})'
+          - 'AKIA[A-Z0-9]{16}'

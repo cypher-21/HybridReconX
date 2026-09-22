@@ -5,42 +5,21 @@
 # Extract and analyze parameters using ParamSpider, Arjun, and GF patterns
 # ============================================================================
 
-set -euo pipefail
+# Don't exit on errors - tools may fail without meaning module failure
+set -uo pipefail
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# Interrupt handling
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "${SCRIPT_DIR}/../lib/interrupt.sh" ]] && source "${SCRIPT_DIR}/../lib/interrupt.sh" && install_module_handler
+# Source config library
+[[ -f "${SCRIPT_DIR}/../lib/config.sh" ]] && source "${SCRIPT_DIR}/../lib/config.sh"
+# Source logging library (centralized log(), count_lines(), get_threads(), get_rate_limit())
+[[ -f "${SCRIPT_DIR}/../lib/logging.sh" ]] && source "${SCRIPT_DIR}/../lib/logging.sh"
+set_log_module "PARAM"
 
 PROBE_DIR="${OUTPUT_BASE}/probed"
 CONTENT_DIR="${OUTPUT_BASE}/content"
 PARAM_DIR="${OUTPUT_BASE}/params"
-
-log() {
-    local level="$1"; shift
-    case "$level" in
-        INFO) echo -e "${GREEN}[PARAM]${NC} $*" ;;
-        WARN) echo -e "${YELLOW}[PARAM]${NC} $*" ;;
-        TASK) echo -e "${CYAN}[PARAM]${NC} $*" ;;
-    esac
-}
-
-count_lines() {
-    [[ -f "$1" ]] && wc -l < "$1" | tr -d ' ' || echo "0"
-}
-
-get_threads() {
-    if [[ -n "${THREADS:-}" ]]; then
-        echo "$THREADS"
-    elif [[ "${AGGRESSIVE_MODE:-false}" == true ]]; then
-        echo "50"
-    elif [[ "${STEALTH_MODE:-false}" == true ]]; then
-        echo "5"
-    else
-        echo "20"
-    fi
-}
 
 # ============================================================================
 # PARAMSPIDER (Archive Mining)
@@ -51,26 +30,27 @@ run_paramspider() {
     local output_dir="${PARAM_DIR}/paramspider"
     mkdir -p "$output_dir"
     
+    # Detect ParamSpider - check pip version first
+    if ! command -v paramspider &>/dev/null; then
+        log WARN "ParamSpider not available (install via pip: pip install paramspider)"
+        return
+    fi
+    
     if [[ -n "${TARGET:-}" ]]; then
-        python3 /opt/tools/ParamSpider/paramspider.py \
-            -d "$TARGET" \
-            --exclude "jpg,jpeg,png,gif,svg,ico,woff,woff2,ttf,eot,css" \
-            --output "${output_dir}/${TARGET}_params.txt" \
-            --level high \
-            2>/dev/null || log WARN "ParamSpider failed for $TARGET"
+        log INFO "Running ParamSpider on $TARGET"
+        # Pip version uses --stream to output to stdout
+        paramspider -d "$TARGET" --stream 2>/dev/null > "${output_dir}/${TARGET}_params.txt" || {
+            log WARN "ParamSpider returned no results for $TARGET"
+        }
     elif [[ -f "${RECON_DIR:-}/root_domains.txt" ]]; then
         while IFS= read -r domain; do
-            python3 /opt/tools/ParamSpider/paramspider.py \
-                -d "$domain" \
-                --exclude "jpg,jpeg,png,gif,svg,ico,woff,woff2,ttf,eot,css" \
-                --output "${output_dir}/${domain}_params.txt" \
-                --level high \
-                2>/dev/null || true
+            [[ -z "$domain" ]] && continue
+            paramspider -d "$domain" --stream 2>/dev/null > "${output_dir}/${domain}_params.txt" || true
         done < "${RECON_DIR}/root_domains.txt"
     fi
     
-    # Merge results
-    cat "${output_dir}"/*.txt 2>/dev/null | sort -u > "${PARAM_DIR}/paramspider_all.txt" || true
+    # Merge results (filter out empty lines and comments)
+    cat "${output_dir}"/*.txt 2>/dev/null | grep -v "^$" | grep -v "^\[" | grep "http" | sort -u > "${PARAM_DIR}/paramspider_all.txt" || true
     
     log INFO "ParamSpider found $(count_lines "${PARAM_DIR}/paramspider_all.txt") URLs with params"
 }
@@ -92,29 +72,89 @@ run_arjun() {
     log TASK "Running Arjun (active parameter discovery)..."
     
     local input="${PROBE_DIR}/live_hosts.txt"
-    local output="${PARAM_DIR}/arjun_output.json"
+    local output_dir="${PARAM_DIR}/arjun"
     local threads=$(get_threads)
     
+    # Create live_hosts.txt from TARGET if missing (for --only-params mode)
     if [[ ! -f "$input" ]]; then
+        if [[ -n "${TARGET:-}" ]]; then
+            log INFO "Creating live hosts from target: $TARGET"
+            mkdir -p "${PROBE_DIR}"
+            # Try both http and https
+            echo "https://${TARGET}" > "$input"
+            echo "http://${TARGET}" >> "$input"
+        else
+            log WARN "No live hosts file found and no TARGET specified"
+            return
+        fi
+    fi
+    
+    mkdir -p "$output_dir"
+    
+    # Limit to first 20 hosts (Arjun is slow)
+    head -20 "$input" > "${PARAM_DIR}/arjun_input.txt"
+    
+    local input_count=$(wc -l < "${PARAM_DIR}/arjun_input.txt")
+    if [[ $input_count -eq 0 ]]; then
+        log WARN "No hosts to scan with Arjun"
         return
     fi
     
-    # Limit to first 50 hosts
-    head -50 "$input" > "${PARAM_DIR}/arjun_input.txt"
+    log INFO "Scanning $input_count hosts with Arjun..."
     
-    arjun -i "${PARAM_DIR}/arjun_input.txt" \
-        -t "$threads" \
-        -o "$output" \
-        --stable \
-        2>/dev/null || true
+    local success_count=0
+    local error_count=0
+    local max_errors=5  # Stop after too many consecutive errors
     
-    # Parse output
-    if [[ -f "$output" ]]; then
-        jq -r 'to_entries[] | .key as $url | .value[] | "\($url)?\(.)=FUZZ"' "$output" 2>/dev/null | \
-            sort -u > "${PARAM_DIR}/arjun_params.txt" || true
+    # Run Arjun with proper error handling and timeout
+    while IFS= read -r url; do
+        [[ -z "$url" ]] && continue
+        
+        # Validate URL format
+        if [[ ! "$url" =~ ^https?:// ]]; then
+            log WARN "Invalid URL format, skipping: $url"
+            continue
+        fi
+        
+        local domain=$(echo "$url" | sed -E 's|^https?://||' | sed -E 's|/.*||' | sed 's/:.*$//')
+        local output_file="${output_dir}/${domain}_arjun.txt"
+        
+        log INFO "Arjun scanning: $url"
+        
+        # Run Arjun with timeout and filter error messages
+        local result
+        if timeout 120 arjun -u "$url" -t "$threads" -o "$output_file" 2>&1 | \
+           grep -v "Encountered an error" | \
+           grep -v "ConnectionError" | \
+           grep -v "Timeout" | \
+           head -50; then
+            ((success_count++))
+            error_count=0  # Reset error counter on success
+        else
+            ((error_count++))
+            log WARN "Arjun failed for: ${url:0:50}..."
+            
+            # Stop if too many consecutive errors
+            if [[ $error_count -ge $max_errors ]]; then
+                log WARN "Too many consecutive errors ($error_count), stopping Arjun"
+                break
+            fi
+        fi
+        
+        # Small delay between hosts to avoid rate limiting
+        sleep 0.5
+        
+    done < "${PARAM_DIR}/arjun_input.txt"
+    
+    # Merge results
+    cat "${output_dir}"/*.txt 2>/dev/null | sort -u > "${PARAM_DIR}/arjun_params.txt" || true
+    
+    local found=$(count_lines "${PARAM_DIR}/arjun_params.txt")
+    if [[ $found -gt 0 ]]; then
+        log INFO "Arjun discovered $found parameters ($success_count hosts successful)"
+    else
+        log WARN "Arjun found no parameters (may need manual testing)"
     fi
-    
-    log INFO "Arjun discovered $(count_lines "${PARAM_DIR}/arjun_params.txt") parameters"
 }
 
 # ============================================================================

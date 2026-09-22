@@ -1,0 +1,79 @@
+# ============================================================================
+# HYBRIDRECON X - Docker Ignore File
+# ============================================================================
+# Excludes files that should not be copied to the Docker image.
+# This improves build caching - unchanged layers won't rebuild.
+# ============================================================================
+
+# Git
+.git
+.gitignore
+
+# Output directories (generated during scans)
+output/
+output
+
+# State files
+.hybridrecon_state/
+*.checkpoint
+*.state
+
+# Logs
+*.log
+logs/
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Docker files (don't copy into itself)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Large wordlist backups (use the ones in container)
+*.wordlist.bak
+wordlists_backup/

@@ -1,6 +1,14 @@
 # ============================================================================
-# HYBRIDRECON X - CENTRAL CONFIGURATION
+# HYBRIDRECON X - CENTRAL CONFIGURATION (EXAMPLE)
 # ============================================================================
+#
+# SETUP: Copy this file to config.yaml before use:
+#
+#   cp config.yaml.example config.yaml
+#
+# Then fill in your API keys, webhook URLs, and other secrets.
+# config.yaml is in .gitignore — your secrets will NOT be committed.
+#
 # All settings for the framework are controlled here.
 # API keys, thread limits, rate limiting, and module toggles.
 # ============================================================================

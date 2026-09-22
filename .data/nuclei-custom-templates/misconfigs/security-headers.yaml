@@ -1,0 +1,69 @@
+id: security-headers-missing
+info:
+  name: Missing Security Headers
+  author: hybridrecon-x
+  severity: info
+  description: Detects missing security headers that could lead to security issues
+  tags: misconfig,headers,security
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "strict-transport-security"
+        negative: true
+
+      - type: word
+        part: header
+        words:
+          - "x-frame-options"
+        negative: true
+
+      - type: word
+        part: header
+        words:
+          - "x-content-type-options"
+        negative: true
+
+      - type: word
+        part: header
+        words:
+          - "content-security-policy"
+        negative: true
+
+---
+
+id: server-version-disclosure
+info:
+  name: Server Version Disclosure
+  author: hybridrecon-x
+  severity: low
+  description: Server header reveals version information
+  tags: misconfig,disclosure,headers
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "(?i)server:\\s*[a-z]+\\/[0-9]+\\.[0-9]+"
+          - "(?i)x-powered-by:\\s*.+"
+
+      - type: status
+        status:
+          - 200
+          - 301
+          - 302
+          - 403
+          - 404

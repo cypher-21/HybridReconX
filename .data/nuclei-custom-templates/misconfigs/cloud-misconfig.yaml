@@ -1,0 +1,88 @@
+id: aws-s3-bucket-listing
+info:
+  name: AWS S3 Bucket Listing Enabled
+  author: hybridrecon-x
+  severity: high
+  description: Detects AWS S3 buckets with directory listing enabled
+  tags: cloud,aws,s3,misconfig
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "<ListBucketResult"
+          - "<Contents>"
+          - "<Key>"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+
+---
+
+id: aws-config-exposure
+info:
+  name: AWS Configuration Exposure
+  author: hybridrecon-x
+  severity: critical
+  description: Detects exposed AWS configuration files
+  tags: cloud,aws,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.aws/credentials"
+      - "{{BaseURL}}/.aws/config"
+      - "{{BaseURL}}/aws-exports.js"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "aws_access_key_id"
+          - "aws_secret_access_key"
+          - "AKIA"
+        condition: or
+
+      - type: regex
+        part: body
+        regex:
+          - "AKIA[0-9A-Z]{16}"
+          - "aws_session_token"
+
+---
+
+id: azure-storage-exposure
+info:
+  name: Azure Storage Misconfiguration
+  author: hybridrecon-x
+  severity: high
+  description: Detects exposed Azure storage endpoints
+  tags: cloud,azure,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "<?xml version"
+          - "<EnumerationResults"
+          - "blob.core.windows.net"
+        condition: and
+
+      - type: status
+        status:
+          - 200

